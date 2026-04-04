@@ -1,0 +1,51 @@
+# CODEOWNERS — Directory ownership map
+# Used by scripts/boundary_check.py to enforce role boundaries
+# Format: directory_pattern  role_name
+
+# CTO owns nothing code-related — only task files and architecture docs
+tasks/                      cto
+
+# Data Engineer
+data/                       data-engineer
+tests/test_data.py          data-engineer
+
+# Quant Researcher
+features/                   quant-researcher
+viz/                        quant-researcher
+tests/test_fvg.py           quant-researcher
+tests/test_displacement.py  quant-researcher
+tests/test_sessions.py      quant-researcher
+
+# Experiment Runner (replaces ML Engineer — ML does not beat rules for signal selection)
+models/                     experiment-runner
+.lab/                       experiment-runner
+tests/test_model.py         experiment-runner
+notebooks/                  experiment-runner
+
+# Backtest Engineer
+backtest/                   backtest-engineer
+tests/test_backtest.py      backtest-engineer
+
+# Risk Officer — only writes tests and audit scripts
+tests/test_no_lookahead.py  risk-officer
+scripts/risk_audit.py       risk-officer
+scripts/hellaudit.py        risk-officer
+tests/test_edge_cases.py    risk-officer
+
+# Execution Engineer
+live/                       execution-engineer
+tests/test_live.py          execution-engineer
+
+# External Auditor — governs the system itself
+audits/                     external-auditor
+.claude/profiles/           external-auditor
+CODEOWNERS                  external-auditor
+TEAM_ARCHITECTURE.md        external-auditor
+scripts/code_review.py      external-auditor
+scripts/boundary_check.py   external-auditor
+
+# Shared (any developer can modify, but must go through review)
+config/params.yaml          quant-researcher
+config/news_calendar.csv    data-engineer
+CLAUDE.md                   cto
+tasks/strategy_decisions.md cto
