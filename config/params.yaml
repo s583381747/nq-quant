@@ -1,0 +1,222 @@
+# NQ Quantitative Trading System — Tunable Parameters
+# ⚠️ All values marked TUNE need iterative adjustment via Phase 1 visual verification
+# NEVER hardcode these values anywhere else in the codebase
+# Last audit: 2026-04-01 (Sprint 5) — 13 fixes applied, all verified
+# Post-audit state: 545t, +156.6R, PPDD=10.39, MaxDD=15.1R, WR=45.9%, PF=1.59
+
+displacement:
+  atr_mult: 0.8            # TUNE [0.5–1.5] — min candle body as multiple of ATR(14)
+  body_ratio: 0.60          # TUNE [0.50–0.80] — min body/range ratio for displacement
+  engulf_min_candles: 1     # TUNE [1–3] — must engulf at least N prior candles
+
+fluency:
+  window: 6                 # TUNE [4–10] — rolling lookback window (candles)
+  threshold: 0.60           # TUNE [0.40–0.80] — min score to be "fluent"
+  w_directional: 0.4        # TUNE — weight for directional consistency
+  w_body_ratio: 0.3         # TUNE — weight for average body/range
+  w_bar_size: 0.3           # TUNE — weight for bar size relative to ATR
+
+swing:
+  left_bars: 3              # TUNE [2–5] — fractal left lookback
+  right_bars: 1             # TUNE [1–3] — fractal right lookback
+
+fvg:
+  # No minimum point size — displacement filter handles this
+  # Invalidation = close through the gap
+  htf_priority:             # Higher index = higher priority
+    - "15m"                 # 0
+    - "1H"                  # 1
+    - "4H"                  # 2
+    - "1D"                  # 3
+
+entry:
+  min_fvg_atr_mult: 0.3        # FVG size must be >= this × ATR(14) to qualify
+  rejection_body_ratio: 0.50    # rejection candle body/range minimum
+  signal_cooldown_bars: 6       # bars before same FVG can signal again
+  require_displacement: false   # if true, only displaced candles generate signals
+  sweep_lookback: 20            # bars to look back for liquidity sweep (MSS)
+
+stop_loss:
+  small_candle_atr_mult: 0.30  # TUNE [0.20–0.50] — if candle range < this × ATR, use swing
+  tighten_factor: 0.85         # Config H+: tighten stop by 15%. More contracts → bigger TP2 profit.
+                               # Validated: +357.4R/PPDD=27.65 vs baseline +316.4R/PPDD=20.34. WF 10/12.
+
+position:
+  normal_r: 1000            # USD — standard risk per trade
+  reduced_r: 500            # USD — Monday/Friday/low fluency
+  instrument_point_value: 20  # NQ mini = $20/point
+  micro_point_value: 2        # MNQ micro = $2/point
+  point_value: 2              # Deployment target = MNQ micro ($2/point)
+
+risk:
+  daily_max_loss_r: 2.0     # Max R to lose per day
+  max_consecutive_losses: 2  # 0-for-2 then stop
+  max_simultaneous_positions: 1
+
+labeling:
+  tp_points: 20             # TUNE [15–40] — triple barrier take profit
+  sl_points: 10             # TUNE [8–20] — triple barrier stop loss
+  max_holding_bars: 20      # TUNE [10–40] — max bars before timeout
+
+news:
+  blackout_minutes_before: 60
+  cooldown_minutes_after: 5
+  high_impact_events:
+    - CPI
+    - FOMC
+    - NFP
+    - GDP
+    - PCE
+    - PPI
+    - "Jobless Claims"
+
+sessions:
+  # All times in EST (handle DST conversion in code)
+  observation_start: "09:00"
+  observation_end: "10:00"
+  ny_start: "09:30"
+  ny_end: "16:00"
+  ny_prime_start: "09:30"       # AUDIT FIX: used by sessions.py for NY prime window
+  asia_start: "18:00"
+  asia_end: "03:00"
+  london_start: "03:00"
+  london_end: "09:30"
+  overnight_start: "18:00"      # AUDIT FIX: used by sessions.py for overnight range
+  overnight_end: "09:30"        # AUDIT FIX: overnight ends at NY open
+  orm_window_minutes: 30        # AUDIT FIX: ORM observation window = 30 min after ny_start
+
+backtest:
+  commission_per_side_mini: 2.05   # USD
+  commission_per_side_micro: 0.62  # USD
+  slippage_normal_ticks: 1
+  slippage_news_ticks: 4           # midpoint of 3-5 range
+  prop_firm_safety_buffer: 0.30    # 30% buffer below firm's drawdown limit
+
+bad_candle:
+  doji_body_ratio: 0.15     # body/range below this = doji
+  long_wick_ratio: 0.60     # max(wick)/range above this = wicky candle
+
+trim:
+  pct: 0.25                 # Config F3: 25% trim at TP1 (was 0.50). +4R over baseline.
+  be_after_trim: true       # move to breakeven after trim
+
+multi_tp:
+  enabled: false             # DISABLED: PnL triple-counting bug invalidated all multi-TP results.
+                            # Bug: exit_contracts=pos_contracts instead of pos_remaining_contracts
+                            # in runner PnL line. Inflated TP2 exits ~3x. All Config E-H++ numbers invalid.
+                            # Multi-TP concept needs complete reimplementation with correct PnL.
+  # Archived params (DO NOT USE until PnL is verified):
+  # tp1_trim_pct: 0.50
+  # tp2_trim_pct: 0.50
+
+b1c_supplement:
+  enabled: false             # DISABLED: depends on multi-TP engine which has PnL bug
+  # Signals concentrate 10:00-11:00 ET, filling 5m gaps
+
+grading:
+  a_plus_size_mult: 1.5     # A+ grade → 1.5× base risk
+  b_plus_size_mult: 1.0     # B+ grade → 1.0× base risk
+  c_skip: false             # Do NOT skip C-grade setups (all experiments use false)
+
+trail:
+  use_nth_swing: 3          # Config E: 3rd swing optimal (was 2). +24.3R, PPDD+1.77, MaxDD unchanged.
+
+pa_quality:
+  alt_dir_threshold: 1.0    # DECISION-003: set to 1.0 (PA alt_dir filter disabled).
+                            # 0.334 → 462 trades, 1.0 → 880+ trades.
+                            # All experiments and deployment candidate (1,010 trades, PPDD=5.33) use 1.0.
+
+regime:
+  # min_stop_points: 10     # OLD fixed-point value (pre-TASK-014)
+  min_stop_atr_mult: 1.7    # ATR-relative: sweep optimal (1.7 → PPDD=9.34, 1156t, WF 9/10)
+                            # TUNE [1.0–2.5] — stop must be ≥ this × ATR to filter tiny candles
+                            # Calibrated: 0.5→PPDD 0.65 (too permissive), 1.5→PPDD 5.89 (best)
+
+session_filter:
+  enabled: true             # VALIDATED: session-direction filter protects from destructive trades
+  ny_direction: 0           # Both directions (dual-mode: shorts gated by SQ≥0.80 + scalp TP)
+  london_direction: 0       # Both directions (shorts only pass SQ≥0.80 anyway)
+  skip_london: true         # VALIDATED: London shorts destructive (-17.1R, 39.1% WR, -0.084 avgR)
+                            # Removing London: PPDD 7.21->12.65 (+75%), MaxDD 17.2->9.0R, PF 1.43->1.95
+                            # WF 7/11 windows won. 323 trades (31/yr) vs 787 baseline.
+  skip_asia: true           # Asia still skipped (low volume)
+
+direction_mgmt:
+  enabled: false            # EXPERIMENT: shorts remain negative under all configs (see .lab/direction_aware_mgmt.txt)
+  # Long settings (keep current behavior)
+  long_tp_mult: 2.0          # NY TP multiplier for longs (validated in sprint 4)
+  long_trim_pct: 0.50        # 50% trim at TP1 (Lanto default)
+  # Short settings (optimized for spike-and-reverse NQ dynamics)
+  short_tp_mult: 1.25        # lower TP for shorts (diagnosis: shorts peak at TP x1.25)
+  short_trim_pct: 1.00       # 100% trim = full exit at TP1, no runner
+
+session_rules:
+  ny_tp_multiplier: 2.0     # Reverted to 2.0 (single-TP validated). Config F3 baseline.
+  enabled: true             # Enable session-based TP scaling
+
+session_regime:
+  enabled: true            # WF-validated (Attack 2): skip 12:30-13:00 ET dead zone
+  am_end: 12.5             # AM window: 10:00-12:30 ET (full risk)
+  am_mult: 1.0             # Full risk in AM
+  lunch_start: 12.5        # Dead zone: 12:30-13:00 ET (worst 30 min, avgR=-0.149)
+  lunch_end: 13.0
+  lunch_mult: 0.0          # SKIP trades in dead zone (WF 6/8 wins, +24% PPDD)
+  pm_start: 13.0           # PM window: 13:00-16:00 ET
+  pm_mult: 1.0             # Full risk in PM (sizing reductions invisible to R metrics)
+
+pm_shorts_block:
+  enabled: true             # Block short entries after cutoff_hour ET
+  cutoff_hour: 14.0         # 14:00 ET — PM shorts avgR=-0.140 (38t, -5.3R baseline)
+                            # Validated: +4.7R, PPDD 10.98→13.32 (+21%), MaxDD 16.2→13.7R
+                            # WF 6/12 years R, 6/12 PPDD. Stacked with SQ=0.80: 8/12 WF.
+
+signal_quality:
+  enabled: true             # Sprint 4 Attack 1: WF-validated signal quality filter
+  threshold: 0.68           # AUDIT FIX: 0.66→0.68 compensate fluency formula change (majority count)
+  w_size: 0.30              # FVG size score weight (gap_size / 1.5*ATR)
+  w_disp: 0.30              # Displacement score weight (body/range of signal candle)
+  w_flu: 0.20               # Fluency score weight (rolling directional consistency)
+  w_pa: 0.20                # PA cleanliness weight (1 - alt_dir_ratio)
+  # momentum: 0.00          # DISABLED — counterproductive (chasing signals)
+
+dual_mode:
+  enabled: true             # Direction-specific SQ thresholds + short scalp TP
+  long_sq_threshold: 0.68   # AUDIT FIX: 0.66→0.68 compensate fluency formula change
+  short_sq_threshold: 0.80  # Optimized: sweep 0.78-0.84, 0.80 is PPDD-optimal (WF 8/12)
+  short_rr: 0.625           # Short TP = entry - rr × stop_distance (scalp target)
+  short_trim_pct: 1.0       # 100% trim for shorts (full exit at TP1, no runner)
+
+bias_relaxation:
+  enabled: false            # VALIDATED +8.6R WF 7/11, but deferred until MSS foundation is stable
+                            # Opposing shorts +11.7R WR=72.2%; opposing longs -16.2R (blocked)
+
+smt:
+  enabled: true
+  sweep_lookback: 15        # Optimized (sweep: 10-40, best=15)
+  time_tolerance: 1         # Optimized (sweep: 1-3, best=1)
+  require_for_mss: true     # MSS must have SMT divergence confirmation
+  require_for_trend: false  # Trend signals don't need SMT
+  bypass_session_filter: true  # AUDIT FIX: MSS+SMT can bypass London/Asia session filter
+
+mss_management:
+  enabled: true
+  long_tp_mult: 2.5          # MSS Long: TP = swing_target * 2.5 (sweep optimal, PPDD=14.46)
+  short_rr: 0.50             # MSS Short: TP = 0.50 * stop_dist (vs Trend's 0.625)
+  short_trim_pct: 1.0        # MSS Short: 100% trim (same as Trend)
+  long_trim_pct: 0.50        # MSS Long: 50% trim (same as Trend)
+
+signal_filter:
+  allow_trend: true
+  allow_mss: true         # DEPLOYED Sprint 5 — MSS enabled with SMT gate (D-018)
+                          # Audit: 2026-04-01, 13 fixes applied, all verified
+
+mtf_fvg:
+  enabled: false            # Disabled by default — needs WF validation before deployment
+  require_alignment: true   # Long requires htf_fvg_bullish_active, short requires htf_fvg_bearish_active
+  tp_target_enabled: false  # Use HTF FVG as TP target (DECISION-006 Application A)
+  tp_min_dist_atr: 2.0      # TUNE [1.5–3.0] — minimum 2×ATR distance for meaningful FVG target
+  tp_max_dist_atr: 8.0      # Cap at 8×ATR to avoid unrealistic targets
+  # DECISION-007: Quality filter — remove noise FVGs at the MTF level
+  min_fvg_size_atr: 0.8     # TUNE [0.5–2.0] — minimum FVG gap size as multiple of ATR(14)
+  min_displacement_body_ratio: 0.5  # Candle-2 body/range must exceed this (displacement check)
+  max_fvg_age_bars: 100     # Expire FVGs older than this many bars on their timeframe

@@ -1,0 +1,57 @@
+# Data files (too large / licensed)
+data/*.parquet
+data/*.csv
+!config/news_calendar.csv
+
+# Lab / dev notes
+.lab/
+.dev/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Environments
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# Backtest results (regenerable)
+backtest/results/*.csv
+backtest/results/*.html
+
+# NinjaTrader build artifacts
+ninjatrader/bin/
+ninjatrader/obj/
+
+# Setup duplicates
+setup/
+
+# Log files
+*.log
