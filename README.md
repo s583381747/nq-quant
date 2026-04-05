@@ -10,14 +10,18 @@ Two-tier entry system combining liquidity sweep reversals and trend continuation
 
 | Metric | Unified | U2 (legacy) |
 |--------|---------|-------------|
-| Total R | **+660.6** | +791.5 |
-| Profit Factor | **2.36** | 1.59 |
-| PPDD (R/MaxDD) | **41.92** | 28.35 |
-| Max Drawdown | **15.8R** | 27.9R |
-| Trades | 863 | 2,589 |
-| Frequency | 0.33/day | 0.98/day |
-| Win Rate | 47.3% | 46.3% |
+| Total R | **+432.0** | +791.5* |
+| Profit Factor | **2.47** | 1.59 |
+| PPDD (R/MaxDD) | **58.16** | 28.35 |
+| Max Drawdown | **7.4R** | 27.9R |
+| Trades | 1,331 | 2,589 |
+| Frequency | 0.50/day | 0.98/day |
+| Win Rate | 43.1% | 46.3% |
+| Sharpe (annualized) | **3.94** | -- |
 | Negative Years | **0/11** | 2/11 |
+| Dollar P&L (MNQ) | **+$432K** | -- |
+
+*R = account R (pnl_dollars / base_r $1000). Legacy U2 used self-referential R (inflated).*
 
 ### How It Works
 
@@ -29,18 +33,18 @@ Two-tier entry system combining liquidity sweep reversals and trend continuation
 4. The entry is in the "discount zone" -- before the structure shift completes -- giving maximum runner space
 
 ```
-292 trades / PF=2.71 / 1.0x risk
+381 trades / PF=3.22 / 1.0x risk
 ```
 
 **Tier 2 -- Trend Entry (Premium/Discount + Bias)**
 
 1. FVG forms in the correct zone: longs in discount (below 50% of overnight range), shorts in premium
-2. Bias must be aligned with the trade direction
+2. Bias must be aligned with the trade direction (4H/1H FVG draw + overnight + ORM composite)
 3. PD alignment verified at both zone creation AND fill time
 4. Excludes FVGs near breakdown events (those belong to Tier 1)
 
 ```
-571 trades / PF=2.17 / 0.5x risk
+950 trades / PF=1.80 / 0.5x risk
 ```
 
 **Exit Management (symmetric for longs and shorts)**
@@ -59,20 +63,20 @@ Two-tier entry system combining liquidity sweep reversals and trend continuation
 ### Walk-Forward Results
 
 ```
-2016:  17t  R= +21.9  PF=4.12
-2017:   9t  R=  +6.7  PF=2.96
-2018:  77t  R= +74.9  PF=2.95
-2019:  50t  R= +24.2  PF=1.95
-2020: 128t  R=+136.7  PF=2.77
-2021: 119t  R= +51.6  PF=1.74
-2022: 107t  R= +88.9  PF=2.36
-2023: 100t  R= +79.9  PF=2.55
-2024: 103t  R= +95.4  PF=2.81
-2025: 121t  R= +75.9  PF=2.05
-2026:  32t  R=  +4.4  PF=1.20
+2016: 146t  R= +25.2  PF=1.80
+2017: 128t  R= +40.8  PF=2.42
+2018: 147t  R= +63.5  PF=2.62
+2019: 125t  R= +33.4  PF=2.38
+2020: 153t  R= +53.4  PF=2.79
+2021: 145t  R= +31.4  PF=1.91
+2022: 104t  R= +28.4  PF=2.17
+2023: 115t  R= +52.5  PF=3.26
+2024: 109t  R= +48.1  PF=3.30
+2025: 126t  R= +53.2  PF=2.87
+2026:  32t  R=  +1.4  PF=1.16
 ```
 
-Every single year profitable. Worst year (2019) still PF=1.95.
+Every single year profitable. 0/11 negative years.
 
 ## Architecture
 
@@ -128,6 +132,18 @@ Buy in discount (below 50% of overnight range), sell in premium (above 50%). Com
 
 ### 5. Runner IS the Edge
 40% of trades exit via runner (be_sweep) at avgR=+2.36. 5.5% via EOD close at avgR=+4.75. Without runners, PF drops to ~1.0. The trim at 1R just activates breakeven protection; the trail mechanism captures the real move.
+
+## Bugs Fixed This Session
+
+### Account R Bug (CRITICAL)
+R was calculated as `pnl_dollars / (stop_dist * point_value * contracts)` -- self-referential per trade. A trend trade at 0.5x risk reported the same R as a 1.0x trade, inflating aggregate R by ~2x for trend tier. Fixed to `pnl_dollars / normal_r` ($1000 base).
+
+**Impact:** Reported R dropped from +660.6 to +291.9 (trend 0.5R). Actual dollar P&L unchanged.
+
+### Fixed Min Stop Bug (CRITICAL)
+`min_stop_pts = 5.0` was a fixed value in points. In 2016-2017 (NQ ~4500, ATR ~3pt), this filtered out 62% of chain zones. In 2024 (NQ ~18000, ATR ~15pt), it filtered almost nothing. Changed to `min_stop_atr_mult = 0.15` (ATR-relative).
+
+**Impact:** 2016 trades: 17 -> 146. 2017 trades: 9 -> 128. Total: 862 -> 1,331 trades. R: +291.9 -> +432.0. PPDD: 38.9 -> 58.2.
 
 ## Audit Trail
 
@@ -191,5 +207,6 @@ Buy in discount (below 50% of overnight range), sell in premium (above 50%). Com
 - **Sprint 6**: NinjaTrader port
 - **Sprint 7**: U2 limit order engine, same-bar-stop bug discovery, audit framework
 - **Sprint 8**: ICT chain discovery, level breakdown, NOT-MSS, symmetric shorts, trend chain, unified engine
+- **Post-Sprint 8**: Account R fix, ATR-relative min stop fix, 2016-2017 trade count restoration
 
 Key evolution: isolated FVG entry has ZERO alpha vs random. Edge comes from the ICT CONTEXT (sweep -> FVG, premium/discount) + trade management (trim/runner/trail).

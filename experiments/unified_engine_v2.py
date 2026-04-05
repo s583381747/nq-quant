@@ -59,7 +59,7 @@ def run_unified_v2(
     max_fvg_age: int = 200,
     stop_buffer_pct: float = 0.15,
     tighten_factor: float = 0.85,
-    min_stop_pts: float = 5.0,
+    min_stop_atr_mult: float = 0.15,
     trim_pct: float = 0.25,
     fixed_tp_r: float = 1.0,
     nth_swing: int = 5,
@@ -205,8 +205,7 @@ def run_unified_v2(
             total_pnl = pnl_pts * point_value * ex_contracts
             total_pnl -= comm * 2 * ex_contracts
         sd = abs(pos.entry_price - pos.stop_price)
-        risk = sd * point_value * pos.contracts
-        r = total_pnl / risk if risk > 0 else 0.0
+        r = total_pnl / normal_r if normal_r > 0 else 0.0
 
         trades.append({
             "entry_time": nq.index[pos.entry_bar],
@@ -219,7 +218,7 @@ def run_unified_v2(
             "contracts": pos.contracts,
         })
 
-        day_pnl += r * pos.daily_weight
+        day_pnl += r
         if ex_reason == "be_sweep" and pos.trimmed:
             pass
         elif ex_reason == "eod_close":
@@ -406,7 +405,8 @@ def run_unified_v2(
                 if tighten_factor < 1.0:
                     sp = ep - sd * tighten_factor if z.direction == 1 else ep + sd * tighten_factor
                     sd = abs(ep - sp)
-                if sd < min_stop_pts or sd < 1.0:
+                min_stop = min_stop_atr_mult * (atr_arr[i] if not np.isnan(atr_arr[i]) else 30.0)
+                if sd < min_stop or sd < 0.5:
                     continue
 
                 sbs = False
@@ -480,7 +480,7 @@ def run_unified_v2(
                 exp = (sp - slip) if direction == 1 else (sp + slip)
                 pp = ((exp - ep) if direction == 1 else (ep - exp)) * point_value * contracts
                 pp -= comm * 2 * contracts
-                rr = pp / (sd * point_value * contracts) if sd > 0 else 0
+                rr = pp / normal_r if normal_r > 0 else 0
                 trades.append({
                     "entry_time": nq.index[i], "exit_time": nq.index[i],
                     "r": rr, "reason": "same_bar_stop", "dir": direction,
@@ -490,7 +490,7 @@ def run_unified_v2(
                     "pnl_dollars": pp, "stop_dist_pts": sd,
                     "contracts": contracts,
                 })
-                day_pnl += rr * daily_weight
+                day_pnl += rr
                 consec_loss += 1
                 if consec_loss >= max_consec: day_stopped = True
                 if day_pnl <= -daily_max_loss_r: day_stopped = True
