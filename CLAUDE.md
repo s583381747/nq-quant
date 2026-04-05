@@ -426,3 +426,71 @@ bad_candle:
 4. **Visual verification** — every feature module must have a companion viz function that overlays signals on K-line charts
 5. **One module per session** — don't try to build everything at once, context window will overflow
 6. **Test for lookahead** — `tests/test_no_lookahead.py` should verify that shuffling future data doesn't change current features
+
+---
+
+## 20. CTO AUTONOMOUS EXPLORATION PROTOCOL
+
+### Role Model
+Claude operates as **CTO** — responsible for high-quality decisions, NOT writing code directly.
+- **CTO**: decides what to explore, evaluates results, kills dead branches, picks next direction
+- **Coder Agent**: writes code, runs experiments, produces numbers
+- **Hell-Audit Agent**: audits coder output for bugs, lookahead, PnL errors
+- **CTO verifies**: reviews audit + numbers, accepts or rejects, updates decision tree
+
+### Decision Tree Protocol
+Every exploration follows this structure:
+```
+HYPOTHESIS → DIAGNOSTIC → RESULT → DECISION
+  ├── Result positive → IMPLEMENT + AUDIT + VERIFY
+  ├── Result neutral → LOG + MOVE TO NEXT BRANCH
+  └── Result negative → LOG + MOVE TO NEXT BRANCH
+```
+
+### Self-Feedback Loop
+After each experiment:
+1. Record result in decision tree (update recovery memory)
+2. Compare against baseline (U2: PF=1.87, +1270R, PPDD=48.4)
+3. If improvement: hell-audit → verify PnL → accept
+4. If no improvement: log why, move up one branch
+5. After exhausting a category: summarize findings, pick next category
+
+### Exploration Queue (prioritized)
+```
+Category A: Bias/MTF Optimization
+  A1. Diagnostic — decompose bias component value (which components help U2?)
+  A2. Daily FVG inclusion (highest priority per spec, currently missing)
+  A3. FVG quality weighting (size/age/distance)
+  A4. Bias weight sweep (0.4/0.3/0.3 → optimal)
+  A5. Asia/London sweep detection
+  A6. Continuous fluency dampening
+
+Category B: Trade Management Refinement
+  B1. Dynamic TP based on HTF FVG distance (not fixed IRL×2.0)
+  B2. Volatility-adaptive stop tightening
+  B3. Time-based exit (fade runners after N bars)
+  B4. Partial trim at multiple levels (25%/25%/25%/25%)
+
+Category C: Signal Generation
+  C1. Short-side U2 (bearish FVG zone limit sell)
+  C2. Multi-timeframe FVG confluence (1H+4H same zone)
+  C3. Inversion FVG (invalidated FVG as reverse S/R)
+
+Category D: Portfolio/Execution
+  D1. F3+U2 combined equity curve analysis
+  D2. Correlation between F3 and U2 trades (diversification value)
+  D3. Dynamic R-sizing based on rolling DD
+```
+
+### Kill Criteria
+- PF drops > 0.05 from baseline → reject
+- PPDD drops > 10% from baseline → reject
+- MaxDD increases > 15% from baseline → reject
+- Fewer than 500 trades → insufficient sample, widen parameters
+- p-value > 0.10 on improvement → not significant, reject
+
+### Current Baselines (NEVER forget these)
+| Strategy | R | PF | PPDD | MaxDD | Trades |
+|----------|------|------|------|-------|--------|
+| U2 | +1270.2 | 1.87 | 48.38 | 26.3R | 2012 |
+| F3 | +86.0 | 1.21 | 4.78 | 18.0R | 1127 |
