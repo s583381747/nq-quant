@@ -35,7 +35,7 @@ consecutive human audits missed a bug that inflated PF from 1.59 to 3.08).
 **This section is NON-NEGOTIABLE. You must answer every question with a specific line number.**
 
 The #1 failure mode of code audits is checking "does the code match the design" instead
-of "does the design match physical reality." These 8 axioms encode physical constraints
+of "does the design match physical reality." These 9 axioms encode physical constraints
 of real trading. A violation means the backtest is WRONG, even if the code is "clean."
 
 ### AXIOM 1: FILL IRREVERSIBILITY ⚠️ HIGHEST PRIORITY
@@ -96,15 +96,60 @@ Is it at least 1 bar for market orders?"
 **YOU MUST ANSWER**: "Is the entry price consistent with the order type?
 Show the line where entry_price is set."
 
-### AXIOM 5: WORST-CASE INTRABAR RESOLUTION
-**When multiple levels are hit on the same bar, assume worst case for the trader.**
+### AXIOM 5: WORST-CASE INTRABAR RESOLUTION (MULTI-POSITION)
+**When multiple positions exit on the same bar, process losses first.**
 
-- Stop and TP both hit → assume stop first (pessimistic, acceptable)
-- Entry and stop both hit → entry fills, then stop hits = loss (Axiom 1)
-- Do NOT cherry-pick the favorable resolution
+- Two positions exit same bar → losing exit processes first (affects daily P&L limit)
+- Do NOT cherry-pick the favorable ordering
 
-**YOU MUST ANSWER**: "When stop and TP are both hit on the same bar,
-which takes priority? Show the line."
+**YOU MUST ANSWER**: "When multiple positions exit on the same bar,
+which processes first? Show the line."
+
+### AXIOM 9: INTRABAR PRICE PATH AMBIGUITY (SINGLE POSITION) ⚠️ HIGH PRIORITY
+**When multiple price levels of a SINGLE position are hit on the same bar,
+the bar resolution is insufficient to determine ordering.**
+
+This is the #1 source of phantom runner profits. Examples:
+- TP1 AND BE/entry both touched on same bar → did TP hit first (runner lives) or BE first (runner dies)?
+- Entry AND stop both touched → already covered by Axiom 1 (same-bar-stop)
+
+**Quantitative test**:
+1. Count all runner trades (trimmed=True)
+2. For each runner, find the trim bar (first bar where TP1 is hit)
+3. Check: does that bar ALSO touch entry price (BE level)?
+   - Long: bar low < entry_price AND bar high >= TP1
+   - Short: bar high > entry_price AND bar low <= TP1
+4. If >10% of runners have this flaw, the bar resolution is INSUFFICIENT
+
+**Results from this project**:
+- 5m bars: 76.0% of runners had TP+BE on same bar (CATASTROPHIC)
+- 1m bars: 41.4% of runners had TP+BE on same bar (STILL BAD)
+- Only tick data can fully resolve this
+
+**YOU MUST ANSWER**: "What percentage of runner trades have TP and BE
+both hit on the same bar? If >10%, what resolution data is needed?
+Show the trim logic and identify the elif that prevents same-bar BE check."
+
+**Known bug pattern (found in production, inflated R by >100%)**:
+```python
+# THIS IS WRONG — elif prevents same-bar BE check after trim:
+if l[i] <= stop:
+    exit("stop")
+elif h[i] >= tp1:           # ← elif: only if stop NOT hit
+    trim()
+    set_be(entry_price)      # BE set, but...
+    # NO CHECK: is l[i] <= entry_price on THIS bar?
+    # Next bar checks BE, but this bar's BE violation is MISSED
+
+# CORRECT — re-check after trim:
+elif h[i] >= tp1:
+    trim()
+    set_be(entry_price)
+    if l[i] <= entry_price:  # Same-bar BE check
+        exit("be_sweep")     # Runner dies immediately
+```
+
+**Impact formula**: `flaw_rate × avg_runner_R × num_runners = phantom R`
 
 ### AXIOM 6: TRANSACTION COST COMPLETENESS
 **Every trade must include realistic costs.**
@@ -267,7 +312,7 @@ For EACH issue found, report in this format:
 
 After all issues are catalogued, deliver the final verdict:
 
-- **Axiom Compliance**: X/8 axioms verified with line numbers
+- **Axiom Compliance**: X/9 axioms verified with line numbers
 - **Deployment Readiness Score**: 0-10
 - **GO / NO-GO / CONDITIONAL-GO**
 - **Top 3 issues that MUST be fixed before deployment**
@@ -280,7 +325,7 @@ After all issues are catalogued, deliver the final verdict:
 3. You may NOT trust comments — verify against the actual code.
 4. You MUST provide specific line numbers for every issue.
 5. You MUST estimate the PnL impact of every CRITICAL issue.
-6. You MUST answer ALL 8 axiom questions with specific line numbers.
+6. You MUST answer ALL 9 axiom questions with specific line numbers.
 7. You MUST run `tests/test_execution_realism.py` if it exists.
 8. If you find zero issues, you failed as an auditor. Look harder.
 9. The developer's feelings are irrelevant. Only correctness matters.
