@@ -346,7 +346,13 @@ def run_hybrid_1m(
                     eff = max(eff, pos.be_stop)
                 if l1[i_1m] <= eff:
                     ex_price = eff - slip
-                    ex_reason = "be_sweep" if (pos.trimmed and eff >= pos.be_stop) else "stop"
+                    if pos.trimmed:
+                        if use_be:
+                            ex_reason = "be_sweep" if eff >= pos.be_stop else "stop"
+                        else:
+                            ex_reason = "be_sweep"
+                    else:
+                        ex_reason = "stop"
                     exited = True
                 elif not pos.trimmed and h1[i_1m] >= pos.tp1_price:
                     tc = max(1, int(pos.contracts * trim_pct))
@@ -380,7 +386,13 @@ def run_hybrid_1m(
                         eff = pos.be_stop
                 if h1[i_1m] >= eff:
                     ex_price = eff + slip
-                    ex_reason = "be_sweep" if (pos.trimmed and eff <= pos.be_stop) else "stop"
+                    if pos.trimmed:
+                        if use_be:
+                            ex_reason = "be_sweep" if eff <= pos.be_stop else "stop"
+                        else:
+                            ex_reason = "be_sweep"
+                    else:
+                        ex_reason = "stop"
                     exited = True
                 elif not pos.trimmed and l1[i_1m] <= pos.tp1_price:
                     tc = max(1, int(pos.contracts * trim_pct))
