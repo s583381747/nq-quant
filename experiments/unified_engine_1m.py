@@ -93,6 +93,9 @@ def run_hybrid_1m(
     # Exit variant flags
     use_be: bool = True,
     be_offset_r: float = 0.0,  # 0 = BE at entry, 0.5 = entry - 0.5R
+    worst_case_trim_be: bool = False,  # Axiom 9: check BE on same bar as trim
+    # Tier filter: 0=both, 1=chain only, 2=trend only
+    tier_filter: int = 0,
 ) -> tuple[list[dict], dict]:
 
     # ---- 5m data for zone detection ----
@@ -357,6 +360,11 @@ def run_hybrid_1m(
                         ex_reason = "tp1"
                         ex_contracts = pos.contracts
                         exited = True
+                    # Axiom 9: worst-case same-bar BE check after trim
+                    elif worst_case_trim_be and use_be and l1[i_1m] <= pos.be_stop:
+                        ex_price = pos.be_stop - slip
+                        ex_reason = "be_sweep"
+                        exited = True
                 if pos.trimmed and not exited:
                     nt = _find_nth_swing(swing_low_mask_5m, swing_low_price_5m, i_5m, nth_swing)
                     if not np.isnan(nt) and nt > pos.trail_stop:
@@ -387,6 +395,11 @@ def run_hybrid_1m(
                         ex_price = pos.tp1_price
                         ex_reason = "tp1"
                         ex_contracts = pos.contracts
+                        exited = True
+                    # Axiom 9: worst-case same-bar BE check after trim
+                    elif worst_case_trim_be and use_be and h1[i_1m] >= pos.be_stop:
+                        ex_price = pos.be_stop + slip
+                        ex_reason = "be_sweep"
                         exited = True
                 if pos.trimmed and not exited:
                     nt = _find_nth_swing(swing_high_mask_5m, swing_high_price_5m, i_5m, nth_swing)
@@ -442,7 +455,8 @@ def run_hybrid_1m(
         if len(positions) >= max_positions:
             continue
 
-        for target_tier in [1, 2]:
+        tiers_to_try = [1, 2] if tier_filter == 0 else [tier_filter]
+        for target_tier in tiers_to_try:
             if day_stopped:
                 break
             if target_tier in occupied_tiers:
@@ -457,31 +471,35 @@ def run_hybrid_1m(
             for z in active_zones:
                 if z.used or z.birth_bar >= i_5m or z.tier != target_tier:
                     continue
+                ep = z.top if z.direction == 1 else z.bottom
+
+                # Check fill first (needed for candle mode)
+                if z.direction == 1 and l1[i_1m] > ep:
+                    continue
+                if z.direction == -1 and h1[i_1m] < ep:
+                    continue
+
+                local_atr = atr1[i_1m] if not np.isnan(atr1[i_1m]) else 30.0
+
+                # Zone-based stop: FVG far side + buffer
                 if z.direction == 1:
-                    ep = z.top
                     sp = z.bottom - z.size * stop_buffer_pct
                 else:
-                    ep = z.bottom
                     sp = z.top + z.size * stop_buffer_pct
                 sd = abs(ep - sp)
                 if tighten_factor < 1.0:
                     sp = ep - sd * tighten_factor if z.direction == 1 else ep + sd * tighten_factor
-                    sd = abs(ep - sp)
-                min_stop = min_stop_atr_mult * (atr1[i_1m] if not np.isnan(atr1[i_1m]) else 30.0)
+
+                sd = abs(ep - sp)
+                min_stop = min_stop_atr_mult * local_atr
                 if sd < min_stop or sd < 0.5:
                     continue
 
                 sbs = False
-                if z.direction == 1:
-                    if l1[i_1m] > ep:
-                        continue
-                    if l1[i_1m] <= sp:
-                        sbs = True
-                else:
-                    if h1[i_1m] < ep:
-                        continue
-                    if h1[i_1m] >= sp:
-                        sbs = True
+                if z.direction == 1 and l1[i_1m] <= sp:
+                    sbs = True
+                elif z.direction == -1 and h1[i_1m] >= sp:
+                    sbs = True
 
                 if z.direction == 1 and bias1[i_1m] < 0:
                     continue

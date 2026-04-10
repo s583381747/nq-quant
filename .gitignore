@@ -50,6 +50,19 @@ backtest/results/*.html
 ninjatrader/bin/
 ninjatrader/obj/
 
+# NT8 data import files (too large for git, regenerable via export_to_nt8.py)
+ninjatrader/*.txt
+ninjatrader/*.csv
+ninjatrader/__pycache__/
+
+# Claude Code local state
+.claude/
+
+# Local audit/review/tasks dirs
+audits/
+reviews/
+tasks/
+
 # Setup duplicates
 setup/
 
