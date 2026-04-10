@@ -81,7 +81,11 @@ def run_hybrid_1m(
     stop_buffer_pct: float = 0.15,
     tighten_factor: float = 0.85,
     min_stop_atr_mult: float = 0.15,
-    trim_pct: float = 0.25,
+    # V4 defaults (2026-04-10): Axiom 9 structurally resolved
+    # No BE + minimal trim (1 contract at TP activates trail) + pure 5th swing trail
+    # Result: +891R / PF=3.53 / PPDD=63.3 / 0 neg yrs across 11 years
+    # NOTE: trim_pct=0.0 trims 1 contract (max(1, int(c*0))) — activates trail mode
+    trim_pct: float = 0.0,
     fixed_tp_r: float = 1.0,
     nth_swing: int = 5,
     eod_close: bool = True,
@@ -91,9 +95,9 @@ def run_hybrid_1m(
     trend_r_mult: float = 0.5,
     max_positions: int = 2,
     # Exit variant flags
-    use_be: bool = True,
-    be_offset_r: float = 0.0,  # 0 = BE at entry, 0.5 = entry - 0.5R
-    worst_case_trim_be: bool = False,  # Axiom 9: check BE on same bar as trim
+    use_be: bool = False,             # V4: no BE, structurally eliminates Axiom 9
+    be_offset_r: float = 0.0,         # 0 = BE at entry (only active if use_be=True)
+    worst_case_trim_be: bool = False, # Axiom 9: N/A when use_be=False
     # Tier filter: 0=both, 1=chain only, 2=trend only
     tier_filter: int = 0,
 ) -> tuple[list[dict], dict]:

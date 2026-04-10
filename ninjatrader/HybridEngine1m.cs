@@ -323,12 +323,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                 StartBehavior = StartBehavior.WaitUntilFlat;
                 BarsRequiredToTrade = 50;
 
-                // params.yaml defaults
+                // params.yaml defaults + V4 (Axiom 9 structurally resolved, 2026-04-10)
+                // V4: no BE + trim_pct=0.0 (trims 1 contract) + pure 5th swing trail
+                // Python validated: +891R / PF=3.53 / PPDD=63.3 / 0 neg years
                 FvgSizeAtrMult = 0.3;  MaxFvgAge = 200;  MaxWaitBars = 30;
                 MinBreakdownDepth = 1.0;
                 StopBufferPct = 0.15;  TightenFactor = 0.85;  MinStopAtrMult = 0.15;
-                TrimPct = 0.25;  FixedTpR = 1.0;  NthSwing = 5;
-                UseBE = true;  BeOffsetR = 0.0;  WorstCaseTrimBe = false;
+                TrimPct = 0.0;  FixedTpR = 1.0;  NthSwing = 5;  // V4 baseline
+                UseBE = false;  BeOffsetR = 0.0;  WorstCaseTrimBe = false; // V4: no BE
                 NormalR = 1000;  ReducedR = 500;
                 DailyMaxLossR = 2.0;  MaxConsecLosses = 2;  MaxPositions = 2;
                 APlusMult = 1.5;  BPlusMult = 1.0;

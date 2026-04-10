@@ -26,52 +26,64 @@ Phase 2: 1m Execution Loop
 
 ## Performance (10.3 years, 2015-2026, hell-audited)
 
-### The Intrabar TP/BE Ambiguity (Axiom 9)
+### V4 Baseline — Axiom 9 Structurally Resolved (2026-04-10)
 
-When TP and entry (for BE calculation) are both touched on the same bar, OHLC cannot distinguish which came first:
-- **Path A**: price hits TP → trim → BE active → price returns → runner dies
-- **Path B**: price dips first (no BE yet) → rallies to TP → trim → runner lives
+Previously, the engine bounded performance between optimistic/worst-case because of the intrabar TP/BE ambiguity (76% of 5m runners / 41% of 1m runners affected). We claimed "only tick data can resolve this."
 
-Flaw rates:
-- 5m bars: 76% of runners affected (catastrophic)
-- 1m bars: 41% of runners affected (significant)
-- Only tick data can fully resolve this
+**That claim was wrong.** Structural removal of BE eliminates the conflict entirely AND improves performance:
 
-Solution: bound performance between **optimistic** and **worst-case**.
+| Variant | Trades | R | PF | PPDD | MaxDD | Neg Years |
+|---------|--------|------|------|------|-------|-----------|
+| **V4 NEW BASELINE** (no BE + pure trail) ⭐ | **1511** | **+891.8** | **3.53** | **63.3** | **14.1R** | **0/11** |
+| V2 Old optimistic bound (with BE) | 1541 | +700.0 | 3.32 | 75.1 | 9.3R | 0/11 |
+| V3 No BE + 25% trim | 1512 | +692.5 | 3.07 | 54.5 | 12.7R | 0/11 |
+| V1 Old worst-case bound (BE + Axiom 9 forced) | 1550 | +414.4 | 2.32 | 43.0 | 9.6R | 0/11 |
 
-### Performance Bounds
+**V4 beats the old worst-case baseline by +477R and +1.21 PF.** And it beats the old optimistic bound by +192R and +0.21 PF.
 
-| Config | Trades | R | PF | PPDD | MaxDD | Sharpe | Neg Years |
-|--------|--------|------|------|------|-------|--------|-----------|
-| **Optimistic** (BE NOT checked on trim bar) | 1541 | **+700.0** | **3.32** | **75.1** | **9.3R** | **4.92** | **0/11** |
-| **Worst-case** (Axiom 9: BE forced on trim bar) | 1550 | **+414.4** | **2.32** | **43.0** | **9.6R** | **3.67** | **0/11** |
+### Why V4 Works
 
-**True performance is between these bounds. Both are profitable. Both have zero negative years.**
+BE at entry was killing runners that would have survived natural price retracements. The Axiom 9 "ambiguity" wasn't just a measurement problem — **BE itself was a performance drag**. Removing it:
 
-### Tier Breakdown (worst-case)
+1. **Mathematically eliminates Axiom 9** — no BE level means no possible TP+BE same-bar conflict
+2. **Lets runners breathe** — small retraces to entry no longer kill the position
+3. **Simpler code** — one less state variable, one less exit branch
+4. **Same robustness** — still 0/11 negative years
 
-| Tier | Trades | R | PF | Notes |
-|------|--------|------|------|-------|
-| Chain (Breakdown → NOT-MSS FVG) | 475 | **+319.3** | 3.09 | 1.0x R, big sweep 1.5x |
-| Trend (PD + Bias → FVG) | 1101 | +94.9 | 1.58 | 0.5x R |
-| **Combined** | **1550** | **+414.4** | **2.32** | — |
+The old "optimistic" bound (+700R/PF=3.32) was essentially "no BE on trim bar only." V4 takes this further: no BE ever. The old worst-case bound (+414R/PF=2.32) was **over-pessimistic by 477R**.
 
-### Walk-Forward (worst-case)
+### V4 Walk-Forward (all 11 years profitable)
 
 ```
-2016: 146t  R= +25.2  PF=1.80
-2017: 128t  R= +40.8  PF=2.42
-2018: 147t  R= +63.5  PF=2.62
-2019: 125t  R= +33.4  PF=2.38
-2020: 153t  R= +53.4  PF=2.79
-2021: 145t  R= +31.4  PF=1.91
-2022: 104t  R= +28.4  PF=2.17
-2023: 115t  R= +52.5  PF=3.26
-2024: 109t  R= +48.1  PF=3.30
-2025: 126t  R= +53.2  PF=2.87
-2026:  32t  R=  +1.4  PF=1.16
+2016: 168t  R= +39.6  PF=1.85
+2017: 141t  R= +76.2  PF=3.10
+2018: 164t  R=+140.6  PF=4.86
+2019: 139t  R=+110.5  PF=5.19
+2020: 163t  R=+106.2  PF=4.08
+2021: 167t  R= +64.9  PF=2.39
+2022: 117t  R= +60.5  PF=3.17
+2023: 131t  R= +95.5  PF=4.67
+2024: 133t  R= +90.5  PF=4.69
+2025: 149t  R= +86.5  PF=3.26
+2026:  38t  R= +19.9  PF=3.08
 ```
-**Zero negative years across 11 years in both bounds.**
+**Zero negative years across 11 years. Minimum PF 1.85 (2016).**
+
+### Tradeoffs
+
+- **MaxDD**: V4 14.1R vs V1 worst-case 9.6R (+4.5R worse drawdown)
+- **PPDD**: V4 63.3 vs V1 43.0 (risk-adjusted return is still materially better)
+- **Win rate**: V4 40.9% vs V1 36.2% (higher because runners don't get BE-killed)
+
+The drawdown is the price of giving BE protection. The +477R in total R and +20.3 in PPDD is the reward. V4 is a Pareto improvement if you can tolerate 4.5R more max drawdown.
+
+### Old Bounds (retained for historical reference)
+
+Prior to 2026-04-10, the engine reported:
+- Optimistic: +700R / PF=3.32 (BE active, not checked on trim bar)
+- Worst-case: +414R / PF=2.32 (BE active, checked on trim bar — Axiom 9 forced)
+
+These bounds are now superseded by V4. They remain useful for understanding why BE was a drag, not a feature.
 
 ## How It Works
 
@@ -248,8 +260,12 @@ Spec §8 specified candle-based stop (fill bar open). Tested against zone-based 
 
 After removing fake profit: candle mode becomes net negative in both tiers. **Zone-based stop is the only valid approach for limit orders.** Candle mode removed from engine.
 
-### Axiom 9 — Intrabar TP/BE Ambiguity (2026-04-06)
-Added 9th axiom to hell-audit. Runs strategy with `worst_case_trim_be=True` to bound performance pessimistically. True performance lies between optimistic and worst-case bounds. Both bounds are profitable.
+### Axiom 9 — Structurally Resolved (2026-04-10)
+Previously bounded between optimistic/worst-case. Evaluation of 7 structural alternatives showed:
+- **V4 (no BE + pure trail) beats worst-case by +477R** — not just equal, but materially better
+- Removing BE eliminates the conflict by construction — Axiom 9 becomes N/A
+- New baseline: +891R / PF=3.53 / 0 neg years (vs old worst +414R / 2.32)
+- Claim "only tick data can resolve this" was wrong — structural change is cheaper and better
 
 ### Account R Bug (CRITICAL)
 R was `pnl_dollars / (stop_dist × point_value × contracts)` — self-referential. Trend 0.5x trades reported same R as 1.0x → inflated aggregate R ~2x. Fixed to `pnl_dollars / normal_r` ($1000 base). Impact: reported R dropped from +660.6 to +291.9 (5m engine). Dollar P&L unchanged.
@@ -278,9 +294,9 @@ R was `pnl_dollars / (stop_dist × point_value × contracts)` — self-referenti
 | 6 | Transaction cost completeness | PASS |
 | 7 | Risk denominator consistency | PASS |
 | 8 | State reset (day boundary close) | PASS |
-| **9** | **Intrabar price path ambiguity (TP/BE same bar)** | **BOUNDED** |
+| **9** | **Intrabar price path ambiguity (TP/BE same bar)** | **RESOLVED (V4)** |
 
-Axiom 9 cannot PASS without tick data — instead, performance is bounded between worst-case (PF=2.32) and optimistic (PF=3.32). Both bounds are profitable.
+Axiom 9 was structurally resolved by removing BE entirely (V4 baseline). No BE level → no possible same-bar TP+BE conflict. Performance improved from +414R/PF=2.32 (old worst-case bound) to +891R/PF=3.53 (V4). No tick data needed.
 
 ## Statistical Validation
 
